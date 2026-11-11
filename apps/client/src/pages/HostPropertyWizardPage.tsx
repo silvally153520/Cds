@@ -52,7 +52,7 @@ const emptyRoom: RoomForm = {
   holidayPrice: '', maxGuests: '2', maxAdults: '2', maxChildren: '0', area: '', bedCount: '1',
   bedType: '', availableRooms: '1', images: [], amenities: [], status: 'ACTIVE',
 };
-const steps = ['Cơ bản', 'Địa điểm', 'Hình ảnh', 'Tiện nghi', 'Chính sách', 'Loại phòng', 'Xem lại'];
+const steps = ['Cơ bản', 'Địa điểm', 'Hình ảnh', 'Tiện nghi', 'Chính sách', 'Loại phòng', 'Hoàn tất'];
 const propertyTypes = [
   ['HOTEL', 'Khách sạn'], ['RESORT', 'Resort'], ['VILLA', 'Biệt thự'], ['HOMESTAY', 'Homestay'], ['APARTMENT', 'Căn hộ'], ['MOTEL', 'Nhà nghỉ'],
 ];
@@ -77,7 +77,7 @@ export function HostPropertyWizardPage() {
   const [customAmenity, setCustomAmenity] = useState('');
   const [step, setStep] = useState(1);
   const [propertyId, setPropertyId] = useState(id ?? '');
-  const [propertyStatus, setPropertyStatus] = useState('DRAFT');
+  const [propertyStatus, setPropertyStatus] = useState('ACTIVE');
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -117,13 +117,13 @@ export function HostPropertyWizardPage() {
   const updateForm = <K extends keyof PropertyForm>(key: K, value: PropertyForm[K]) => setForm((current) => ({ ...current, [key]: value }));
   const updateRoomForm = <K extends keyof RoomForm>(key: K, value: RoomForm[K]) => setRoomForm((current) => ({ ...current, [key]: value }));
 
-  const saveDraft = async () => {
+  const saveProperty = async () => {
     setSaving(true);
     setError('');
     setNotice('');
     try {
       if (!form.name.trim() || !form.code.trim() || form.description.trim().length < 20 || !form.address.trim() || !form.city.trim() || !form.district.trim()) {
-        throw new Error('Để lưu bản nháp, hãy nhập tên, mã, mô tả (ít nhất 20 ký tự), địa chỉ, tỉnh/thành và quận/huyện.');
+        throw new Error('Hãy nhập tên, mã, mô tả (ít nhất 20 ký tự), địa chỉ, tỉnh/thành và quận/huyện.');
       }
       const payload = {
         ...form, slug: form.slug || slugify(form.name), latitude: form.latitude === '' ? undefined : Number(form.latitude),
@@ -137,7 +137,7 @@ export function HostPropertyWizardPage() {
       setPropertyStatus(response.data.status);
       if (response.data.status !== 'REJECTED') setRejectionReason('');
       if (!id) navigate(`/host/properties/${response.data.id}/edit`, { replace: true });
-      setNotice('Bản nháp đã được lưu.');
+      setNotice('Đã lưu chỗ nghỉ. Chỗ nghỉ đang hoạt động và có thể hiển thị công khai.');
       return response.data.id as string;
     } catch (err: any) {
       const message = err instanceof Error && !('response' in err) ? err.message : err?.response?.data?.message ?? 'Không thể lưu bản nháp.';
@@ -210,7 +210,7 @@ export function HostPropertyWizardPage() {
 
   const saveRoom = async () => {
     if (!propertyId) {
-      setError('Hãy lưu thông tin cơ sở trước khi thêm loại phòng.');
+      setError('Hãy lưu chỗ nghỉ trước khi thêm loại phòng.');
       return;
     }
     setSaving(true);
@@ -272,27 +272,16 @@ export function HostPropertyWizardPage() {
     }
   };
 
-  const submitForReview = async () => {
-    let savedId = propertyId;
-    if (!savedId) savedId = await saveDraft();
-    else if (await saveDraft() === '') return;
-    if (!savedId) return;
-    try {
-      await api.post(`/host/properties/${savedId}/submit`);
-      setPropertyStatus('PENDING_APPROVAL');
-      setRejectionReason('');
-      setNotice('Đã gửi cơ sở lưu trú để Admin kiểm duyệt.');
-      navigate('/host/properties');
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Không thể gửi yêu cầu duyệt.');
-    }
+  const finishProperty = async () => {
+    if (!await saveProperty()) return;
+    navigate('/host/properties');
   };
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div><Link to="/host/properties" className="text-sm font-semibold text-emerald-700">← Cơ sở lưu trú của tôi</Link><p className="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">WIZARD · {propertyStatus}</p><h1 className="mt-2 text-3xl font-black text-slate-950">{propertyId ? 'Cập nhật cơ sở lưu trú' : 'Thêm cơ sở lưu trú'}</h1></div>
-        <button disabled={saving} onClick={() => void saveDraft()} className="rounded-full border border-emerald-200 px-4 py-2.5 text-sm font-bold text-emerald-800 disabled:opacity-50">{saving ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+        <div><Link to="/host/properties" className="text-sm font-semibold text-emerald-700">← Chỗ nghỉ của tôi</Link><p className="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">TRẠNG THÁI · {propertyStatus}</p><h1 className="mt-2 text-3xl font-black text-slate-950">{propertyId ? 'Cập nhật chỗ nghỉ' : 'Thêm chỗ nghỉ'}</h1></div>
+        <button disabled={saving} onClick={() => void saveProperty()} className="rounded-full border border-emerald-200 px-4 py-2.5 text-sm font-bold text-emerald-800 disabled:opacity-50">{saving ? 'Đang lưu…' : propertyId ? 'Lưu thay đổi' : 'Lưu chỗ nghỉ'}</button>
       </header>
       <div className="mb-6">
         <div className="mb-2 flex justify-between text-xs font-semibold text-slate-500"><span>Bước {step} / {steps.length}</span><span>{steps[step - 1]}</span></div>
@@ -302,7 +291,7 @@ export function HostPropertyWizardPage() {
       {error && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}
       {notice && <p role="status" className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{notice}</p>}
       <section className="min-h-[420px] rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-        {rejectionReason && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Lý do Admin từ chối:</strong> {rejectionReason}. Chỉnh sửa thông tin rồi gửi lại để được kiểm duyệt.</p>}
+        {rejectionReason && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Thông tin trước đây:</strong> {rejectionReason}. Cập nhật và lưu để chỗ nghỉ hoạt động trở lại.</p>}
         {step === 1 && <div className="space-y-5">
           <StepTitle title="Thông tin cơ bản" description="Thông tin nhận diện và giới thiệu cơ sở lưu trú." />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -334,7 +323,7 @@ export function HostPropertyWizardPage() {
         {step === 4 && <div className="space-y-5"><StepTitle title="Tiện nghi cơ sở" description="Chọn tiện nghi có sẵn và bổ sung tiện nghi khác." /><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{amenityOptions.map((item) => <Check key={item} label={item} checked={form.amenities.includes(item)} onChange={() => toggleAmenity(item)} />)}</div><div className="flex gap-2"><input className={textInput} value={customAmenity} onChange={(e) => setCustomAmenity(e.target.value)} placeholder="Tiện nghi khác" /><button onClick={() => { const value = customAmenity.trim(); if (value) { toggleAmenity(value); setCustomAmenity(''); } }} className="rounded-xl border px-4 text-sm font-bold">Thêm</button></div><div className="flex flex-wrap gap-2">{form.amenities.filter((item) => !amenityOptions.includes(item)).map((item) => <button key={item} onClick={() => toggleAmenity(item)} className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-800">{item} ×</button>)}</div></div>}
         {step === 5 && <div className="space-y-5"><StepTitle title="Chính sách" description="Cập nhật thông tin để khách nắm rõ trước khi đặt." />{policyLabels.map((label, index) => <Field key={label} label={label}><input className={textInput} value={form.policies[index] ?? ''} onChange={(e) => updateForm('policies', form.policies.map((value, current) => current === index ? e.target.value : value))} placeholder={index < 2 ? 'VD: 14:00' : 'Nhập chính sách…'} /></Field>)}</div>}
         {step === 6 && <div className="space-y-6">
-          <StepTitle title="Thêm loại phòng" description="Một cơ sở có thể có nhiều loại phòng với giá và tồn kho riêng. Hãy lưu thông tin cơ sở trước khi thêm phòng." />
+          <StepTitle title="Thêm loại phòng" description="Một chỗ nghỉ có thể có nhiều loại phòng với giá và tồn kho riêng. Hãy lưu chỗ nghỉ trước khi thêm phòng." />
           {rooms.length > 0 && <div className="space-y-2">{rooms.map((room) => <div key={room.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><p className="font-semibold">{room.name} · {room.code}</p><p className="text-sm text-slate-500">{room.type} · {Number(room.basePrice).toLocaleString('vi-VN')} ₫/đêm · {room.availableRooms} phòng</p></div><div className="flex gap-2"><button onClick={() => editRoom(room)} className="text-sm font-semibold text-emerald-700">Sửa</button><button onClick={() => void deleteRoom(room)} className="text-sm font-semibold text-red-600">Xóa</button></div></div>)}</div>}
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 sm:p-5">
             <h3 className="mb-4 font-bold text-slate-900">{editingRoom ? 'Chỉnh sửa loại phòng' : 'Loại phòng mới'}</h3>
@@ -361,13 +350,13 @@ export function HostPropertyWizardPage() {
           </div>
         </div>}
         {step === 7 && <div className="space-y-5">
-          <StepTitle title="Xem lại và gửi duyệt" description="Kiểm tra nội dung trước khi chuyển cho Admin." />
+          <StepTitle title="Kiểm tra và hoàn tất" description="Xem lại thông tin chỗ nghỉ và các loại phòng trước khi hoàn tất." />
           <div className="grid gap-4 rounded-2xl bg-slate-50 p-5 sm:grid-cols-2"><Summary label="Cơ sở" value={`${form.name} (${form.code})`} /><Summary label="Loại hình" value={propertyTypes.find(([value]) => value === form.type)?.[1] ?? form.type} /><Summary label="Địa chỉ" value={[form.detailAddress, form.address, form.ward, form.district, form.city].filter(Boolean).join(', ')} /><Summary label="Hình ảnh / tiện nghi" value={`${form.images.length} ảnh · ${form.amenities.length} tiện nghi`} /><Summary label="Loại phòng" value={`${rooms.length} loại phòng · ${rooms.reduce((sum, room) => sum + Number(room.availableRooms), 0)} phòng thực tế`} /><Summary label="Chính sách" value={form.policies.filter(Boolean).length ? form.policies.filter(Boolean).join(' · ') : 'Chưa nhập'} /></div>
           {form.images[0] && <img src={form.images[0]} alt="Ảnh đại diện" className="h-56 w-full rounded-2xl object-cover" />}
-          <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sau khi gửi, cơ sở sẽ hiển thị công khai khi Admin phê duyệt. Nếu bị từ chối, bạn có thể chỉnh sửa rồi gửi lại.</p>
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Chỗ nghỉ được kích hoạt ngay sau khi lưu. Bạn có thể tiếp tục quản lý thông tin và phòng trong trang Host.</p>
         </div>}
       </section>
-      <footer className="mt-5 flex justify-between gap-3"><button disabled={step === 1} onClick={() => { setStep((value) => value - 1); setError(''); }} className="rounded-full border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 disabled:opacity-40">Quay lại</button><div className="flex gap-2">{step < steps.length ? <button onClick={() => { if (validateStep()) setStep((value) => Math.min(steps.length, value + 1)); }} className="rounded-full bg-emerald-700 px-6 py-3 text-sm font-bold text-white">Tiếp tục</button> : <button disabled={saving || rooms.length === 0} onClick={() => void submitForReview()} className="rounded-full bg-emerald-700 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">Gửi Admin duyệt</button>}</div></footer>
+      <footer className="mt-5 flex justify-between gap-3"><button disabled={step === 1} onClick={() => { setStep((value) => value - 1); setError(''); }} className="rounded-full border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 disabled:opacity-40">Quay lại</button><div className="flex gap-2">{step < steps.length ? <button onClick={() => { if (validateStep()) setStep((value) => Math.min(steps.length, value + 1)); }} className="rounded-full bg-emerald-700 px-6 py-3 text-sm font-bold text-white">Tiếp tục</button> : <button disabled={saving} onClick={() => void finishProperty()} className="rounded-full bg-emerald-700 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">Lưu và hoàn tất</button>}</div></footer>
     </div>
   );
 }

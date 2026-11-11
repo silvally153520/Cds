@@ -100,12 +100,12 @@ const bookingLabels: Record<string, string> = {
   COMPLETED: 'Hoàn tất',
 };
 const propertyStatusLabels: Record<string, string> = {
-  DRAFT: 'Bản nháp',
-  PENDING: 'Chờ duyệt',
-  PENDING_APPROVAL: 'Chờ duyệt',
-  ACTIVE: 'Đã duyệt',
-  APPROVED: 'Đã duyệt',
-  REJECTED: 'Bị từ chối',
+  DRAFT: 'Chưa công khai',
+  PENDING: 'Chưa công khai',
+  PENDING_APPROVAL: 'Chưa công khai',
+  ACTIVE: 'Đang hoạt động',
+  APPROVED: 'Đang hoạt động',
+  REJECTED: 'Chưa công khai',
   INACTIVE: 'Đang ẩn',
 };
 const successfulBookingStatuses = new Set(['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'COMPLETED']);

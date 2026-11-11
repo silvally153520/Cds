@@ -206,7 +206,13 @@ Run the backend database migration as a one-off command before routing productio
 npm --workspace server run prisma:migrate:deploy
 ```
 
-Set `DATABASE_URL` and `DIRECT_URL` in the Render environment for this command. Do not run the demo seed script against a production database.
+Set `DATABASE_URL` and `DIRECT_URL` in the Render environment for migrations. To add the idempotent sample property/room catalog to an existing database, run this one-off command from the repository root with the same database environment configured:
+
+```bash
+npm run seed
+```
+
+The seed requires an existing ADMIN or HOST account, upserts 10 sample properties and 50 rooms, and does not create users/bookings or delete existing data. It also reports and verifies the sample and overall property/room counts. It does not run migrations.
 
 For an existing Supabase database with the previous Sieuechxanh tables but no Prisma migration history, do not reset it. First take a database backup and verify that its schema matches `20261108120000_initial_schema`. Then baseline that already-present schema and apply the booking migration:
 

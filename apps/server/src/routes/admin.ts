@@ -1,7 +1,10 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, requireRoles, type AuthRequest } from '../middleware/auth.js';
+import { getPeakBookedRooms } from '../lib/bookingAvailability.js';
+import { propertyInputSchema, roomInputSchema } from '../lib/hostSchemas.js';
 
 const router = Router();
 
@@ -91,6 +94,136 @@ router.get('/properties', requireAuth, requireRoles('ADMIN'), async (_req: AuthR
       rooms: property.rooms.map((room) => ({ ...room, basePrice: Number(room.basePrice) })),
     })),
   );
+});
+
+router.post('/properties', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const parsed = propertyInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Thông tin cơ sở lưu trú chưa hợp lệ.', issues: parsed.error.flatten() });
+  }
+  try {
+    const property = await prisma.property.create({
+      data: { ...parsed.data, hostId: req.user!.id, status: 'ACTIVE', rejectionReason: null },
+      include: { rooms: true },
+    });
+    return res.status(201).json(property);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: 'Mã cơ sở hoặc đường dẫn đã được sử dụng.' });
+    }
+    throw error;
+  }
+});
+
+router.put('/properties/:id', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const propertyId = String(req.params.id);
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  if (!property) return res.status(404).json({ message: 'Property not found.' });
+
+  const parsed = propertyInputSchema.partial().safeParse(req.body);
+  if (!parsed.success || Object.keys(parsed.data ?? {}).length === 0) {
+    return res.status(400).json({ message: 'Invalid property update payload.', issues: parsed.success ? undefined : parsed.error.flatten() });
+  }
+  try {
+    return res.json(await prisma.property.update({ where: { id: propertyId }, data: parsed.data }));
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: 'Mã cơ sở hoặc đường dẫn đã được sử dụng.' });
+    }
+    throw error;
+  }
+});
+
+router.get('/properties/:id/rooms', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const propertyId = String(req.params.id);
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true } });
+  if (!property) return res.status(404).json({ message: 'Property not found.' });
+  const rooms = await prisma.room.findMany({ where: { propertyId }, orderBy: { createdAt: 'asc' } });
+  return res.json(rooms.map((room) => ({
+    ...room,
+    basePrice: Number(room.basePrice),
+    weekendPrice: room.weekendPrice === null ? null : Number(room.weekendPrice),
+    holidayPrice: room.holidayPrice === null ? null : Number(room.holidayPrice),
+  })));
+});
+
+router.post('/properties/:id/rooms', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const propertyId = String(req.params.id);
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true } });
+  if (!property) return res.status(404).json({ message: 'Property not found.' });
+  const parsed = roomInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Thông tin loại phòng chưa hợp lệ.', issues: parsed.error.flatten() });
+  }
+  try {
+    const room = await prisma.room.create({
+      data: {
+        ...parsed.data,
+        status: 'ACTIVE',
+        basePrice: new Prisma.Decimal(parsed.data.basePrice),
+        weekendPrice: parsed.data.weekendPrice == null ? null : new Prisma.Decimal(parsed.data.weekendPrice),
+        holidayPrice: parsed.data.holidayPrice == null ? null : new Prisma.Decimal(parsed.data.holidayPrice),
+        propertyId,
+      },
+    });
+    return res.status(201).json({
+      ...room,
+      basePrice: Number(room.basePrice),
+      weekendPrice: room.weekendPrice === null ? null : Number(room.weekendPrice),
+      holidayPrice: room.holidayPrice === null ? null : Number(room.holidayPrice),
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: 'Mã loại phòng đã được sử dụng.' });
+    }
+    throw error;
+  }
+});
+
+router.patch('/rooms/:id', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const roomId = String(req.params.id);
+  const room = await prisma.room.findUnique({ where: { id: roomId } });
+  if (!room) return res.status(404).json({ message: 'Room not found.' });
+  const parsed = roomInputSchema.partial().safeParse(req.body);
+  if (!parsed.success || Object.keys(parsed.data ?? {}).length === 0) {
+    return res.status(400).json({ message: 'Invalid room update payload.', issues: parsed.success ? undefined : parsed.error.flatten() });
+  }
+  if (parsed.data.availableRooms !== undefined && parsed.data.availableRooms < room.availableRooms) {
+    const bookings = await prisma.booking.findMany({
+      where: { roomId: room.id, status: { in: ['CONFIRMED', 'CHECKED_IN'] }, checkOut: { gt: new Date() } },
+      select: { checkIn: true, checkOut: true, roomCount: true },
+    });
+    if (getPeakBookedRooms(bookings) > parsed.data.availableRooms) {
+      return res.status(409).json({ message: 'Không thể giảm số phòng thấp hơn số phòng đã được đặt.' });
+    }
+  }
+  const data = {
+    ...parsed.data,
+    ...(parsed.data.basePrice === undefined ? {} : { basePrice: new Prisma.Decimal(parsed.data.basePrice) }),
+    ...(parsed.data.weekendPrice === undefined ? {} : { weekendPrice: parsed.data.weekendPrice === null ? null : new Prisma.Decimal(parsed.data.weekendPrice) }),
+    ...(parsed.data.holidayPrice === undefined ? {} : { holidayPrice: parsed.data.holidayPrice === null ? null : new Prisma.Decimal(parsed.data.holidayPrice) }),
+  };
+  try {
+    const updated = await prisma.room.update({ where: { id: roomId }, data });
+    return res.json({
+      ...updated,
+      basePrice: Number(updated.basePrice),
+      weekendPrice: updated.weekendPrice === null ? null : Number(updated.weekendPrice),
+      holidayPrice: updated.holidayPrice === null ? null : Number(updated.holidayPrice),
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: 'Mã loại phòng đã được sử dụng.' });
+    }
+    throw error;
+  }
+});
+
+router.delete('/rooms/:id', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {
+  const room = await prisma.room.findUnique({ where: { id: String(req.params.id) }, select: { id: true } });
+  if (!room) return res.status(404).json({ message: 'Room not found.' });
+  const updated = await prisma.room.update({ where: { id: room.id }, data: { status: 'INACTIVE' } });
+  return res.json({ ...updated, basePrice: Number(updated.basePrice) });
 });
 
 router.patch('/properties/:id', requireAuth, requireRoles('ADMIN'), async (req: AuthRequest, res) => {

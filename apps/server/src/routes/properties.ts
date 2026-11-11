@@ -1,38 +1,13 @@
-import { Prisma, PropertyType, type RoomType } from '@prisma/client';
+import { Prisma, PropertyType } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { propertyInputSchema, roomInputSchema } from '../lib/hostSchemas.js';
 import { requireApprovedHost, requireAuth, requireRoles, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-const propertySchema = z.object({
-  name: z.string().min(3),
-  slug: z.string().min(3),
-  type: z.enum(['HOTEL', 'RESORT', 'VILLA', 'HOMESTAY', 'APARTMENT', 'MOTEL']),
-  description: z.string().min(20),
-  address: z.string().min(5),
-  city: z.string().min(2),
-  district: z.string().min(2),
-  latitude: z.coerce.number().optional(),
-  longitude: z.coerce.number().optional(),
-  amenities: z.array(z.string()).default([]),
-  images: z.array(z.string().url()).default([]),
-  policies: z.array(z.string()).default([]),
-  rooms: z.array(
-    z.object({
-      code: z.string().min(2),
-      name: z.string().min(2),
-      type: z.enum(['STANDARD', 'DELUXE', 'VIP', 'FAMILY']),
-      description: z.string().min(10),
-      basePrice: z.coerce.number().min(1000),
-      maxGuests: z.coerce.number().min(1),
-      availableRooms: z.coerce.number().min(1).default(1),
-      images: z.array(z.string().url()).default([]),
-      amenities: z.array(z.string()).default([]),
-    }),
-  ),
-});
+const propertySchema = propertyInputSchema.extend({ rooms: z.array(roomInputSchema) });
 
 const propertyUpdateSchema = propertySchema.omit({ rooms: true });
 
@@ -99,21 +74,27 @@ router.post('/', requireAuth, requireRoles('HOST'), requireApprovedHost, async (
   const property = await prisma.property.create({
     data: {
       ...propertyData,
-      type: propertyData.type as PropertyType,
       hostId: req.user!.id,
-      status: 'PENDING',
+      status: 'ACTIVE',
       rooms: {
         create: rooms.map((room) => ({
           code: room.code,
           name: room.name,
-          type: room.type as RoomType,
+          type: room.type,
           description: room.description,
-          basePrice: room.basePrice,
+          basePrice: new Prisma.Decimal(room.basePrice),
+          weekendPrice: room.weekendPrice == null ? null : new Prisma.Decimal(room.weekendPrice),
+          holidayPrice: room.holidayPrice == null ? null : new Prisma.Decimal(room.holidayPrice),
           maxGuests: room.maxGuests,
+          maxAdults: room.maxAdults,
+          maxChildren: room.maxChildren,
+          area: room.area,
+          bedCount: room.bedCount,
+          bedType: room.bedType,
           availableRooms: room.availableRooms,
           images: room.images,
           amenities: room.amenities,
-          status: 'PENDING',
+          status: 'ACTIVE' as const,
         })),
       },
     },
@@ -148,13 +129,20 @@ router.patch('/:id', requireAuth, requireRoles('HOST'), requireApprovedHost, asy
 
   const updateData: any = {
     ...parsed.data,
-    status: property.status === 'REJECTED' ? 'PENDING' : property.status,
+    status: property.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+    rejectionReason: null,
   };
 
-  const updated = await prisma.property.update({
-    where: { id: propertyId },
-    data: updateData,
-    include: { rooms: true, host: { select: { id: true, fullName: true, email: true } } },
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.property.update({
+      where: { id: propertyId },
+      data: updateData,
+      include: { rooms: true, host: { select: { id: true, fullName: true, email: true } } },
+    });
+    if (updateData.status === 'ACTIVE') {
+      await tx.room.updateMany({ where: { propertyId, status: 'PENDING' }, data: { status: 'ACTIVE' } });
+    }
+    return result;
   });
 
   return res.json({
@@ -175,8 +163,8 @@ router.delete('/:id', requireAuth, requireRoles('HOST'), requireApprovedHost, as
     return res.status(403).json({ message: 'You can only delete your own properties.' });
   }
 
-  await prisma.property.delete({ where: { id: propertyId } });
-  return res.json({ message: 'Property deleted successfully.' });
+  const updated = await prisma.property.update({ where: { id: propertyId }, data: { status: 'INACTIVE' } });
+  return res.json(updated);
 });
 
 export default router;

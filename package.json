@@ -14,6 +14,7 @@
     "build:client": "npm --workspace client run build",
     "build:server": "npm --workspace server run build",
     "build:ai": "npm --workspace ai-worker run build",
+    "seed": "npm --workspace server run seed",
     "build": "npm run build:client && npm run build:server && npm run build:ai",
     "lint:client": "npm --workspace client run lint",
     "lint": "npm run lint:client",

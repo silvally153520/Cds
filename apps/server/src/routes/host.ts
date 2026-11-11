@@ -1,50 +1,12 @@
 import { Router } from 'express';
-import { Prisma, PropertyType, RoomType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { propertyInputSchema, roomInputSchema } from '../lib/hostSchemas.js';
 import { getPeakBookedRooms } from '../lib/bookingAvailability.js';
 import { requireApprovedHost, requireAuth, requireRoles, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
-
-const imageList = z.array(z.string().url().max(2048)).max(30).default([]);
-const propertyInputSchema = z.object({
-  code: z.string().trim().min(2).max(80),
-  name: z.string().trim().min(3).max(255),
-  slug: z.string().trim().min(3).max(255),
-  type: z.nativeEnum(PropertyType),
-  description: z.string().trim().min(20),
-  address: z.string().trim().min(5).max(255),
-  detailAddress: z.string().trim().max(255).optional().nullable(),
-  city: z.string().trim().min(2).max(120),
-  district: z.string().trim().min(2).max(120),
-  ward: z.string().trim().max(120).optional().nullable(),
-  latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
-  longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
-  amenities: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
-  images: imageList,
-  policies: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
-});
-
-const roomInputSchema = z.object({
-  code: z.string().trim().min(2).max(80),
-  name: z.string().trim().min(2).max(255),
-  type: z.nativeEnum(RoomType),
-  description: z.string().trim().min(10),
-  basePrice: z.coerce.number().min(1000).max(1000000000),
-  weekendPrice: z.coerce.number().min(1000).max(1000000000).optional().nullable(),
-  holidayPrice: z.coerce.number().min(1000).max(1000000000).optional().nullable(),
-  maxGuests: z.coerce.number().int().min(1).max(50),
-  maxAdults: z.coerce.number().int().min(1).max(50).default(2),
-  maxChildren: z.coerce.number().int().min(0).max(50).default(0),
-  area: z.coerce.number().min(1).max(10000).optional().nullable(),
-  bedCount: z.coerce.number().int().min(1).max(50).default(1),
-  bedType: z.string().trim().max(80).optional().nullable(),
-  availableRooms: z.coerce.number().int().min(0).max(500).default(1),
-  images: imageList,
-  amenities: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
-  status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
-});
 
 const dateOnly = z.string().date();
 const calendarRangeSchema = z.object({ from: dateOnly, to: dateOnly }).refine((value) => {
@@ -177,7 +139,7 @@ router.post('/properties', requireAuth, requireRoles('HOST'), requireApprovedHos
     if (!parsed.success) return res.status(400).json({ message: 'Thông tin cơ sở lưu trú chưa hợp lệ.', issues: parsed.error.flatten() });
     try {
       const property = await prisma.property.create({
-        data: { ...parsed.data, hostId: req.user!.id, status: 'DRAFT' },
+        data: { ...parsed.data, hostId: req.user!.id, status: 'ACTIVE', rejectionReason: null },
         include: { rooms: true },
       });
       return res.status(201).json(property);
@@ -214,12 +176,19 @@ router.post('/properties', requireAuth, requireRoles('HOST'), requireApprovedHos
       return res.status(400).json({ message: 'Thông tin cập nhật chưa hợp lệ.', issues: parsed.success ? undefined : parsed.error.flatten() });
     }
     try {
-      const updated = await prisma.property.update({
-        where: { id: property.id },
-        data: {
-          ...parsed.data,
-          ...(property.status === 'ACTIVE' ? { status: 'PENDING_APPROVAL', rejectionReason: null } : {}),
-        },
+      const updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.property.update({
+          where: { id: property.id },
+          data: {
+            ...parsed.data,
+            status: property.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+            rejectionReason: null,
+          },
+        });
+        if (result.status === 'ACTIVE') {
+          await tx.room.updateMany({ where: { propertyId: property.id, status: 'PENDING' }, data: { status: 'ACTIVE' } });
+        }
+        return result;
       });
       return res.json(updated);
     } catch (error) {
@@ -243,23 +212,12 @@ router.post('/properties', requireAuth, requireRoles('HOST'), requireApprovedHos
       include: { rooms: { select: { id: true } } },
     });
     if (!property) return res.status(404).json({ message: 'Không tìm thấy cơ sở lưu trú của bạn.' });
-    if (!property.rooms.length) return res.status(409).json({ message: 'Hãy thêm ít nhất một loại phòng trước khi gửi duyệt.' });
-    if (property.status === 'ACTIVE') return res.status(409).json({ message: 'Cơ sở lưu trú này đã được duyệt.' });
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.property.update({
         where: { id: property.id },
-        data: { status: 'PENDING_APPROVAL', rejectionReason: null },
+        data: { status: 'ACTIVE', rejectionReason: null },
       });
-      const admins = await tx.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
-      if (admins.length) {
-        await tx.notification.createMany({
-          data: admins.map(({ id }) => ({
-            userId: id,
-            title: 'Cơ sở lưu trú chờ duyệt',
-            message: `${property.name} (${property.code ?? property.slug}) vừa được gửi để kiểm duyệt.`,
-          })),
-        });
-      }
+      await tx.room.updateMany({ where: { propertyId: property.id, status: 'PENDING' }, data: { status: 'ACTIVE' } });
       return result;
     });
     return res.json(updated);
@@ -284,7 +242,7 @@ router.post('/properties', requireAuth, requireRoles('HOST'), requireApprovedHos
     if (!parsed.success) return res.status(400).json({ message: 'Thông tin loại phòng chưa hợp lệ.', issues: parsed.error.flatten() });
     try {
       const room = await prisma.room.create({
-        data: { ...parsed.data, basePrice: new Prisma.Decimal(parsed.data.basePrice), weekendPrice: parsed.data.weekendPrice == null ? null : new Prisma.Decimal(parsed.data.weekendPrice), holidayPrice: parsed.data.holidayPrice == null ? null : new Prisma.Decimal(parsed.data.holidayPrice), propertyId: property.id },
+        data: { ...parsed.data, status: 'ACTIVE', basePrice: new Prisma.Decimal(parsed.data.basePrice), weekendPrice: parsed.data.weekendPrice == null ? null : new Prisma.Decimal(parsed.data.weekendPrice), holidayPrice: parsed.data.holidayPrice == null ? null : new Prisma.Decimal(parsed.data.holidayPrice), propertyId: property.id },
       });
       return res.status(201).json(room);
     } catch (error) {

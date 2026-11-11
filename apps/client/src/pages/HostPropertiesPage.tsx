@@ -19,12 +19,12 @@ type Property = {
 };
 
 const statusNames: Record<string, string> = {
-  DRAFT: 'Bản nháp',
-  PENDING: 'Chờ duyệt',
-  PENDING_APPROVAL: 'Chờ duyệt',
-  ACTIVE: 'Đã duyệt',
-  APPROVED: 'Đã duyệt',
-  REJECTED: 'Bị từ chối',
+  DRAFT: 'Chưa công khai',
+  PENDING: 'Chưa công khai',
+  PENDING_APPROVAL: 'Chưa công khai',
+  ACTIVE: 'Đang hoạt động',
+  APPROVED: 'Đang hoạt động',
+  REJECTED: 'Chưa công khai',
   INACTIVE: 'Đang ẩn',
 };
 
@@ -67,20 +67,20 @@ export function HostPropertiesPage() {
     }
   };
 
-  const submitAgain = async (property: Property) => {
+  const activateProperty = async (property: Property) => {
     try {
       await api.post(`/host/properties/${property.id}/submit`);
       await loadProperties();
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Không thể gửi lại yêu cầu duyệt.');
+      setError(err?.response?.data?.message ?? 'Không thể kích hoạt chỗ nghỉ.');
     }
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">Quản lý của Host</p><h1 className="mt-2 text-3xl font-black text-slate-950">Cơ sở lưu trú của tôi</h1><p className="mt-2 text-slate-600">Theo dõi phòng, lịch và trạng thái kiểm duyệt.</p></div>
-        <Link to="/host/properties/new" className="rounded-full bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">+ Thêm cơ sở lưu trú</Link>
+        <div><p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">Quản lý của Host</p><h1 className="mt-2 text-3xl font-black text-slate-950">Chỗ nghỉ của tôi</h1><p className="mt-2 text-slate-600">Quản lý thông tin chỗ nghỉ, loại phòng và lịch hoạt động.</p></div>
+        <Link to="/host/properties/new" className="rounded-full bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">+ Thêm chỗ nghỉ</Link>
       </header>
       {error && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -92,7 +92,7 @@ export function HostPropertiesPage() {
           <div className="grid gap-4">
             {visible.map((property) => {
               const roomCount = property.rooms.reduce((sum, room) => sum + room.availableRooms, 0);
-              const canSubmit = ['DRAFT', 'REJECTED', 'INACTIVE'].includes(property.status);
+              const canActivate = property.status !== 'ACTIVE';
               return (
                 <article key={property.id} className="grid gap-4 rounded-2xl border border-slate-100 p-4 md:grid-cols-[150px_1fr_auto] md:items-center">
                   {property.images[0] ? <img src={property.images[0]} alt={property.name} className="h-28 w-full rounded-xl object-cover md:w-[150px]" /> : <div className="flex h-28 items-center justify-center rounded-xl bg-emerald-50 text-sm text-emerald-800 md:w-[150px]">Chưa có ảnh</div>}
@@ -105,7 +105,7 @@ export function HostPropertiesPage() {
                   <div className="flex flex-wrap gap-2 md:justify-end">
                     <Link to={`/host/properties/${property.id}/edit`} className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Chi tiết / Sửa</Link>
                     <Link to={`/host/calendar?propertyId=${property.id}`} className="rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">Lịch phòng</Link>
-                    {canSubmit && <button onClick={() => void submitAgain(property)} className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Gửi duyệt</button>}
+                    {canActivate && <button onClick={() => void activateProperty(property)} className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Kích hoạt</button>}
                     {property.status === 'ACTIVE' && <button onClick={() => void hideProperty(property)} className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Ẩn</button>}
                   </div>
                 </article>
