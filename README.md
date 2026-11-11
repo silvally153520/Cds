@@ -154,15 +154,16 @@ The Worker uses the native `env.AI` binding, `wrangler.jsonc`, and a Cloudflare 
 3. Use the build command:
 
 ```bash
-npm install
-npm --workspace server run build
+npm install && npm run build:server
 ```
 
 4. Use the start command:
 
 ```bash
-npm --workspace server run start
+npm run start --workspace server
 ```
+
+The server build emits `apps/server/dist/index.js`, which is the entry point used by the workspace start script.
 
 5. Add environment variables in Render:
 
