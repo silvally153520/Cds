@@ -1,0 +1,22 @@
+{
+  "name": "sieuechxanh",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/client",
+    "apps/server",
+    "apps/ai-worker"
+  ],
+  "scripts": {
+    "dev:client": "npm --workspace client run dev",
+    "dev:server": "npm --workspace server run dev",
+    "dev:ai": "npm --workspace ai-worker run dev",
+    "build:client": "npm --workspace client run build",
+    "build:server": "npm --workspace server run build",
+    "build:ai": "npm --workspace ai-worker run build",
+    "build": "npm run build:client && npm run build:server && npm run build:ai",
+    "lint:client": "npm --workspace client run lint",
+    "lint": "npm run lint:client",
+    "test": "npm --workspaces --if-present run test"
+  }
+}

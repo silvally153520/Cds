@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sieuechxanh-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "ratelimits": [
+    {
+      "name": "CHAT_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "API_BASE_URL": "http://localhost:5001/api",
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
+  },
+  "env": {
+    "production": {
+      "name": "sieuechxanh-ai-production",
+      "vars": {
+        "API_BASE_URL": "https://your-backend.example.com/api",
+        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "ALLOWED_ORIGINS": "https://your-frontend.example.com"
+      }
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
+}

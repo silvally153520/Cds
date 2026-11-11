@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  HOST
+  ADMIN
+}
+
+enum PropertyType {
+  HOTEL
+  RESORT
+  VILLA
+  HOMESTAY
+  APARTMENT
+  MOTEL
+}
+
+enum RoomType {
+  STANDARD
+  DELUXE
+  VIP
+  FAMILY
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum HostApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique @db.VarChar(255)
+  password        String           @db.VarChar(255)
+  fullName        String           @db.VarChar(255)
+  avatarUrl       String?          @db.VarChar(2048)
+  phone           String?          @db.VarChar(50)
+  address         String?          @db.VarChar(255)
+  cccd            String?          @db.VarChar(50)
+  role            Role             @default(USER)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  bookings        Booking[]
+  properties      Property[]
+  hostApplication HostApplication?
+  notifications   Notification[]
+}
+
+model HostApplication {
+  id              String                @id @default(cuid())
+  userId          String                @unique
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String                @db.VarChar(255)
+  phone           String?               @db.VarChar(50)
+  address         String?               @db.VarChar(255)
+  cccd            String?               @db.VarChar(50)
+  bio             String?               @db.Text
+  contactInfo     String?               @db.VarChar(255)
+  reason          String?               @db.Text
+  status          HostApplicationStatus @default(PENDING)
+  rejectionReason String?               @db.Text
+  createdAt       DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @db.Timestamptz(6)
+}
+
+model Property {
+  id              String       @id @default(cuid())
+  code            String?      @unique @db.VarChar(80)
+  name            String       @db.VarChar(255)
+  slug            String       @unique @db.VarChar(255)
+  type            PropertyType
+  description     String       @db.Text
+  address         String       @db.VarChar(255)
+  detailAddress   String?      @db.VarChar(255)
+  city            String       @db.VarChar(120)
+  district        String       @db.VarChar(120)
+  ward            String?      @db.VarChar(120)
+  latitude        Float?
+  longitude       Float?
+  amenities       String[]
+  images          String[]
+  policies        String[]
+  status          String       @default("ACTIVE") @db.VarChar(30)
+  rejectionReason String?      @db.Text
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  hostId          String
+  host            User         @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  rooms           Room[]
+}
+
+model Room {
+  id             String             @id @default(cuid())
+  code           String             @unique @db.VarChar(80)
+  name           String             @db.VarChar(255)
+  type           RoomType
+  description    String             @db.Text
+  basePrice      Decimal            @db.Decimal(12, 2)
+  maxGuests      Int
+  maxAdults      Int                @default(2)
+  maxChildren    Int                @default(0)
+  area           Float?
+  bedCount       Int                @default(1)
+  bedType        String?            @db.VarChar(80)
+  weekendPrice   Decimal?           @db.Decimal(12, 2)
+  holidayPrice   Decimal?           @db.Decimal(12, 2)
+  availableRooms Int                @default(1)
+  images         String[]
+  amenities      String[]
+  status         String             @default("ACTIVE") @db.VarChar(30)
+  propertyId     String
+  property       Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
+  availability   RoomAvailability[]
+  prices         RoomPrice[]
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+}
+
+model RoomAvailability {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  status    String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([roomId, date])
+  @@index([date, status])
+}
+
+model RoomPrice {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  price     Decimal  @db.Decimal(12, 2)
+  kind      String   @default("CUSTOM") @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([roomId, date])
+}
+
+model Booking {
+  id               String        @id @default(cuid())
+  code             String        @unique @db.VarChar(80)
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId           String
+  room             Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  checkIn          DateTime      @db.Timestamptz(6)
+  checkOut         DateTime      @db.Timestamptz(6)
+  guestCount       Int
+  roomCount        Int           @default(1)
+  serviceFee       Decimal       @db.Decimal(12, 2)
+  totalPrice       Decimal       @db.Decimal(12, 2)
+  status           BookingStatus @default(CONFIRMED)
+  paymentStatus    PaymentStatus @default(PENDING)
+  roomSnapshot     String?       @db.Text
+  propertySnapshot String?       @db.Text
+  hostSnapshot     String?       @db.Text
+  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(6)
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @db.VarChar(255)
+  message   String    @db.Text
+  readAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, readAt, createdAt])
+}
