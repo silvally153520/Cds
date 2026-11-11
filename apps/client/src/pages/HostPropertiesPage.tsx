@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 
 type Property = {
   id: string;
@@ -10,8 +11,8 @@ type Property = {
   status: string;
   rejectionReason: string | null;
   address: string;
-  city: string;
-  district: string;
+  city?: string | null;
+  district?: string | null;
   images: string[];
   createdAt: string;
   rooms: { id: string; availableRooms: number }[];
@@ -51,7 +52,7 @@ export function HostPropertiesPage() {
   useEffect(() => { void loadProperties(); }, []);
 
   const filtered = useMemo(() => properties.filter((property) => (
-    `${property.name} ${property.code ?? ''} ${property.city} ${property.district}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+    `${property.name} ${property.code ?? ''} ${property.city ?? ''} ${property.district ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
   )), [properties, query]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -97,7 +98,7 @@ export function HostPropertiesPage() {
                   {property.images[0] ? <img src={property.images[0]} alt={property.name} className="h-28 w-full rounded-xl object-cover md:w-[150px]" /> : <div className="flex h-28 items-center justify-center rounded-xl bg-emerald-50 text-sm text-emerald-800 md:w-[150px]">Chưa có ảnh</div>}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold text-slate-950">{property.name}</h2><span className={`rounded-full px-3 py-1 text-xs font-bold ${property.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-800' : property.status === 'REJECTED' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>{statusNames[property.status] ?? property.status}</span></div>
-                    <p className="mt-1 text-sm text-slate-600">{property.code ?? '—'} · {property.type} · {property.district}, {property.city}</p>
+                    <p className="mt-1 text-sm text-slate-600">{property.code ?? '—'} · {property.type} · {property.district ? `${property.district}, ` : ''}{getCityLabel(property.city)}</p>
                     <p className="mt-2 text-sm text-slate-500">{property.rooms.length} loại phòng · {roomCount} phòng thực tế · Tạo ngày {new Date(property.createdAt).toLocaleDateString('vi-VN')}</p>
                     {property.rejectionReason && <p className="mt-2 text-sm font-medium text-red-700">Lý do từ chối: {property.rejectionReason}</p>}
                   </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 
 type Summary = {
   totalUsers: number;
@@ -44,8 +45,8 @@ type ReviewProperty = {
   rejectionReason: string | null;
   images: string[];
   address: string;
-  city: string;
-  district: string;
+  city?: string | null;
+  district?: string | null;
   description: string;
   amenities: string[];
   policies: string[];
@@ -167,7 +168,7 @@ export function AdminPage() {
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-bold text-slate-900">{property.name}</h3><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{property.status}</span></div>
-                <p className="text-sm text-slate-500">{property.code ?? '—'} · {property.type} · {property.address}, {property.district}, {property.city}</p>
+                <p className="text-sm text-slate-500">{property.code ?? '—'} · {property.type} · {property.address}, {property.district ? `${property.district}, ` : ''}{getCityLabel(property.city)}</p>
                 <p className="mt-2 text-sm text-slate-700">{property.description}</p>
                 <p className="mt-2 text-sm text-slate-600">Host: {property.host.fullName} · {property.host.email} · {property.rooms.length} loại phòng</p>
                 <ul className="mt-2 space-y-2">{property.rooms.map((room) => <li key={room.id} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-700"><span className="min-w-0 flex-1">{room.name} · {money(Number(room.basePrice))} · {room.availableRooms} phòng</span><span className="flex gap-1">{room.images.slice(0, 3).map((image) => <img key={image} src={image} alt={`Ảnh ${room.name}`} className="h-10 w-12 rounded-md object-cover" />)}</span></li>)}</ul>

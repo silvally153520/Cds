@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useParams } from 'react-router-dom';
 import { CalendarDays, MapPin, Users } from 'lucide-react';
 import { api, getStoredUser } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 import { propertyTypeLabels } from '../lib/propertyCategories';
 
 const bookingSchema = z.object({
@@ -23,15 +24,15 @@ type RoomDetail = {
   images: string[];
   amenities: string[];
   status: string;
-  property: {
+  property?: {
     id: string;
     name: string;
-    city: string;
+    city?: string | null;
     district: string;
     address: string;
     type: string;
     host: { id: string; fullName: string };
-  };
+  } | null;
 };
 
 export function RoomDetailPage() {
@@ -146,9 +147,9 @@ export function RoomDetailPage() {
           <div className="mt-8 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <h1 className="text-3xl font-black text-slate-900">{room.name}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-600">
-              <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-500" /> {room.property.city}</span>
+              <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-500" /> {getCityLabel(room.property?.city)}</span>
               <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 text-slate-500" /> Tối đa {room.maxGuests} khách</span>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{propertyTypeLabels[room.property.type] ?? room.property.type}</span>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{propertyTypeLabels[room.property?.type ?? ''] ?? room.property?.type}</span>
             </div>
             <p className="mt-5 text-slate-600">{room.description}</p>
             <div className="mt-6">
@@ -210,8 +211,8 @@ export function RoomDetailPage() {
 
           <div className="mt-6 rounded-2xl border border-slate-200 p-4 text-sm text-slate-600">
             <p className="font-semibold text-slate-900">Host</p>
-            <p className="mt-1">{room.property.host.fullName}</p>
-            <div className="mt-3 flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-500" /> {room.property.address}</div>
+            <p className="mt-1">{room.property?.host?.fullName ?? 'Chủ nhà chưa cập nhật'}</p>
+            <div className="mt-3 flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-500" /> {room.property?.address ?? 'Chưa cập nhật địa chỉ'}</div>
           </div>
         </div>
       </div>

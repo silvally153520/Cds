@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, getStoredUser } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 import { propertyTypeLabels } from '../lib/propertyCategories';
 import './HostDashboardPage.css';
 
@@ -57,8 +58,8 @@ type Property = {
   status: string;
   rejectionReason: string | null;
   address: string;
-  city: string;
-  district: string;
+  city?: string | null;
+  district?: string | null;
   images: string[];
   rooms: Room[];
 };
@@ -500,7 +501,7 @@ function PropertyCard({ property }: { property: Property }) {
     </div>
     <div className="host-property-body">
       <div className="host-property-title"><div><span>{propertyTypeLabels[property.type] ?? property.type}</span><h3>{property.name}</h3></div><span className={`host-activity-dot ${property.status === 'ACTIVE' ? 'is-active' : ''}`} title={property.status === 'ACTIVE' ? 'Đang hoạt động' : 'Chưa hoạt động'} /></div>
-      <p className="host-property-location">{property.district}, {property.city}</p>
+      <p className="host-property-location">{property.district ? `${property.district}, ` : ''}{getCityLabel(property.city)}</p>
       <div className="host-property-metrics"><span><BedDouble size={15} /> {property.rooms.length} loại phòng</span><span><PackageOpen size={15} /> {roomCount} phòng</span></div>
       {property.rejectionReason && <p className="host-rejection-reason">{property.rejectionReason}</p>}
       <div className="host-property-actions">

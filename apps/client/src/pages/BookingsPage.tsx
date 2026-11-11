@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 
 type Booking = {
   id: string;
@@ -12,7 +13,7 @@ type Booking = {
     name: string;
     type: string;
     basePrice: number;
-    property: { name: string; city: string };
+    property?: { name: string; city?: string | null } | null;
   };
   checkIn: string;
   checkOut: string;
@@ -95,7 +96,7 @@ export function BookingsPage() {
                     <td className="px-5 py-4">
                       <p className="font-semibold text-slate-900">{booking.room.name}</p>
                       <p className="text-slate-500">{booking.room.type} · {booking.roomCount} phòng</p>
-                      <p className="text-xs text-slate-400">{booking.room.property.name}, {booking.room.property.city}</p>
+                      <p className="text-xs text-slate-400">{booking.room.property?.name ?? 'Chỗ nghỉ chưa cập nhật'}, {getCityLabel(booking.room.property?.city)}</p>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       <p>{new Date(booking.checkIn).toLocaleDateString('vi-VN')}</p>

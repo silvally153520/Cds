@@ -93,7 +93,7 @@ export function HostPropertyWizardPage() {
       setRejectionReason(data.rejectionReason ?? '');
       setForm({
         code: data.code ?? '', name: data.name, slug: data.slug, type: data.type, description: data.description,
-        address: data.address, detailAddress: data.detailAddress ?? '', city: data.city, district: data.district,
+        address: data.address ?? '', detailAddress: data.detailAddress ?? '', city: data.city ?? '', district: data.district ?? '',
         ward: data.ward ?? '', latitude: data.latitude?.toString() ?? '', longitude: data.longitude?.toString() ?? '',
         amenities: data.amenities ?? [], images: data.images ?? [], policies: policyLabels.map((label, index) => {
           const policy = (data.policies ?? []).find((item: string) => item.startsWith(`${label}:`));

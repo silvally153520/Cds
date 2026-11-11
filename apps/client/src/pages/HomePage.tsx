@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { getCityLabel, getCityName, normalizePropertyLocation } from '../lib/location';
 import { propertyTypeLabels } from '../lib/propertyCategories';
 
 type ApiRoom = {
@@ -12,9 +13,38 @@ type ApiRoom = {
   basePrice: number;
   maxGuests: number;
   images: string[];
-  property: { name: string; city: string; district: string; address: string; type: string };
-  host: { id: string; fullName: string };
+  property: { name: string; city: string | null; district: string; address: string; type: string };
+  host: { id: string; fullName: string } | null;
 };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function normalizeRoom(value: unknown): ApiRoom | null {
+  const room = record(value);
+  if (!room || typeof room.id !== 'string' || typeof room.name !== 'string') return null;
+
+  const basePrice = Number(room.basePrice);
+  const property = record(room.property);
+  const host = record(room.host);
+  if (!Number.isFinite(basePrice) || basePrice < 0) return null;
+
+  return {
+    id: room.id,
+    name: room.name,
+    type: typeof room.type === 'string' ? room.type : '',
+    basePrice,
+    maxGuests: Number.isFinite(Number(room.maxGuests)) ? Number(room.maxGuests) : 0,
+    images: Array.isArray(room.images) ? room.images.filter((image): image is string => typeof image === 'string') : [],
+    property: normalizePropertyLocation(property),
+    host: host && typeof host.id === 'string' && typeof host.fullName === 'string'
+      ? { id: host.id, fullName: host.fullName }
+      : null,
+  };
+}
 
 export function HomePage() {
   const [featuredRooms, setFeaturedRooms] = useState<ApiRoom[]>([]);
@@ -35,12 +65,16 @@ export function HomePage() {
     api
       .get('/rooms', { params: { category: selectedType || undefined } })
       .then((response) => {
-        if (active) setFeaturedRooms(response.data);
+        if (!active) return;
+        if (!Array.isArray(response.data)) throw new Error('Dữ liệu danh sách phòng từ máy chủ không đúng định dạng.');
+        const rooms = response.data.map(normalizeRoom);
+        if (rooms.some((room) => room === null)) throw new Error('Một số dữ liệu phòng từ máy chủ không hợp lệ.');
+        setFeaturedRooms(rooms);
       })
       .catch((error) => {
         if (!active) return;
         setFeaturedRooms([]);
-        setRoomsError(error?.response?.data?.message ?? 'Không thể tải danh sách chỗ nghỉ.');
+        setRoomsError(error?.response?.data?.message ?? error?.message ?? 'Không thể tải danh sách chỗ nghỉ.');
       })
       .finally(() => {
         if (active) setRoomsLoading(false);
@@ -51,7 +85,8 @@ export function HomePage() {
   const destinations = useMemo(() => {
     const map = new Map<string, number>();
     for (const room of featuredRooms) {
-      map.set(room.property.city, (map.get(room.property.city) ?? 0) + 1);
+      const cityName = getCityName(room.property.city);
+      if (cityName) map.set(cityName, (map.get(cityName) ?? 0) + 1);
     }
     return Array.from(map.entries()).slice(0, 3).map(([cityName, count]) => ({
       city: cityName,
@@ -129,9 +164,9 @@ export function HomePage() {
       <section className="mt-16 grid gap-6 md:grid-cols-4">
         {[
           { label: 'Tổng số phòng', value: String(featuredRooms.length || 0) },
-          { label: 'Địa điểm đang mở', value: String(new Set(featuredRooms.map((room) => room.property.city)).size || 0) },
+          { label: 'Địa điểm đang mở', value: String(new Set(featuredRooms.map((room) => getCityName(room.property.city)).filter(Boolean)).size) },
           { label: 'Loại hình lưu trú', value: String(new Set(featuredRooms.map((room) => room.property.type)).size) },
-          { label: 'Host đồng hành', value: String(new Set(featuredRooms.map((room) => room.host.fullName)).size || 0) },
+          { label: 'Host đồng hành', value: String(new Set(featuredRooms.map((room) => room.host?.fullName).filter(Boolean)).size || 0) },
         ].map((item) => (
           <div key={item.label} className="luxury-card p-6">
             <p className="text-3xl font-black text-slate-900">{item.value}</p>
@@ -165,7 +200,7 @@ export function HomePage() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{room.name}</h3>
-                  <div className="mt-2 flex items-center gap-2 text-sm text-slate-500"><MapPin className="h-4 w-4 text-emerald-500" /> {room.property.city}</div>
+                  <div className="mt-2 flex items-center gap-2 text-sm text-slate-500"><MapPin className="h-4 w-4 text-emerald-500" /> {getCityLabel(room.property.city)}</div>
                 </div>
                 <div className="flex items-center justify-between text-sm text-slate-600">
                   <span className="flex items-center gap-2"><Users className="h-4 w-4 text-slate-400" /> {room.maxGuests} khách</span>
@@ -175,7 +210,7 @@ export function HomePage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-                  <span className="text-sm text-slate-500">Host: {room.host.fullName}</span>
+                  <span className="text-sm text-slate-500">Host: {room.host?.fullName ?? 'Chưa cập nhật'}</span>
                   <Link to={`/rooms/${room.id}`} className="rounded-full bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600">
                     Đặt ngay
                   </Link>

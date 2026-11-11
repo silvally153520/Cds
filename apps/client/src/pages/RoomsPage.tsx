@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { MapPin, RotateCw, SlidersHorizontal, Star, Users } from 'lucide-react';
 import { api } from '../lib/api';
+import { getCityLabel, normalizePropertyLocation } from '../lib/location';
 import { propertyCategories, propertyTypeLabels } from '../lib/propertyCategories';
 
 type RoomApi = {
@@ -14,7 +15,7 @@ type RoomApi = {
   amenities: string[];
   rating?: number | null;
   reviewCount?: number;
-  property: { id: string; name: string; city: string; district: string; address: string; type: string };
+  property: { id?: string; name: string; city: string | null; district: string; address: string; type: string };
 };
 
 type ExploreFilters = {
@@ -69,7 +70,28 @@ function getErrorMessage(error: unknown) {
     const response = (error as { response?: { data?: { message?: string } } }).response;
     if (response?.data?.message) return response.data.message;
   }
+  if (error instanceof Error && error.message) return error.message;
   return 'Không thể tải dữ liệu chỗ nghỉ. Vui lòng kiểm tra kết nối và thử lại.';
+}
+
+function normalizeRoom(value: unknown): RoomApi | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const room = value as Record<string, unknown>;
+  if (typeof room.id !== 'string' || typeof room.name !== 'string') return null;
+  const basePrice = Number(room.basePrice);
+  if (!Number.isFinite(basePrice) || basePrice < 0) return null;
+  return {
+    id: room.id,
+    name: room.name,
+    type: typeof room.type === 'string' ? room.type : '',
+    basePrice,
+    maxGuests: Number.isFinite(Number(room.maxGuests)) ? Number(room.maxGuests) : 0,
+    images: Array.isArray(room.images) ? room.images.filter((image): image is string => typeof image === 'string') : [],
+    amenities: Array.isArray(room.amenities) ? room.amenities.filter((amenity): amenity is string => typeof amenity === 'string') : [],
+    rating: typeof room.rating === 'number' ? room.rating : null,
+    reviewCount: typeof room.reviewCount === 'number' ? room.reviewCount : 0,
+    property: normalizePropertyLocation(room.property),
+  };
 }
 
 export function RoomsPage() {
@@ -100,10 +122,13 @@ export function RoomsPage() {
       sort: filters.sort === 'popular' ? undefined : filters.sort,
     };
     let active = true;
-    api.get<RoomApi[]>('/rooms', { params })
+    api.get<unknown>('/rooms', { params })
       .then(({ data }) => {
         if (active) {
-          setRooms(data);
+          if (!Array.isArray(data)) throw new Error('Dữ liệu danh sách phòng từ máy chủ không đúng định dạng.');
+          const normalizedRooms = data.map(normalizeRoom);
+          if (normalizedRooms.some((room) => room === null)) throw new Error('Một số dữ liệu phòng từ máy chủ không hợp lệ.');
+          setRooms(normalizedRooms);
           setLoadedKey(requestKey);
           setErrorState(null);
         }
@@ -218,7 +243,7 @@ export function RoomsPage() {
                     </div>
                     <div className="space-y-3 p-5">
                       <div><h3 className="line-clamp-1 text-lg font-extrabold text-slate-900">{room.property.name}</h3><p className="mt-1 line-clamp-1 text-sm text-slate-600">{room.name}</p></div>
-                      <p className="flex items-center gap-1.5 text-sm text-slate-500"><MapPin className="h-4 w-4 shrink-0 text-emerald-600" />{room.property.district}, {room.property.city}</p>
+                      <p className="flex items-center gap-1.5 text-sm text-slate-500"><MapPin className="h-4 w-4 shrink-0 text-emerald-600" />{room.property.district ? `${room.property.district}, ` : ''}{getCityLabel(room.property.city)}</p>
                       <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                         <span className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-4 w-4" />Tối đa {room.maxGuests} khách</span>
                         <span className="text-right"><strong className="block text-base font-black text-slate-900">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(room.basePrice)}</strong><small className="text-xs text-slate-500">mỗi đêm</small></span>

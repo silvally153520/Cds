@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { getAuthToken } from '../lib/api';
+import { getCityLabel } from '../lib/location';
 import { propertyTypeLabels } from '../lib/propertyCategories';
 import './ChatWidget.css';
 
@@ -27,8 +28,8 @@ type RoomResult = {
   property: {
     id: string;
     name: string;
-    city: string;
-    district: string;
+    city?: string | null;
+    district?: string;
     type: string;
   };
 };
@@ -81,7 +82,7 @@ function isRoomResult(value: unknown): value is RoomResult {
     && typeof room.name === 'string'
     && typeof room.basePrice === 'number'
     && typeof room.property?.name === 'string'
-    && typeof room.property?.city === 'string';
+    && typeof room.property?.type === 'string';
 }
 
 function renderInline(text: string): ReactNode[] {
@@ -143,7 +144,7 @@ function RoomResults({ rooms }: { rooms: RoomResult[] }) {
         <p className="sx-chat-room-category">{propertyTypeLabels[room.property.type] ?? room.property.type}</p>
         <Link to={`/rooms/${encodeURIComponent(room.id)}`} className="sx-chat-room-name">{room.property.name}</Link>
         <p className="sx-chat-room-title">{room.name}</p>
-        <p className="sx-chat-room-location">{room.property.district}, {room.property.city} · tối đa {room.maxGuests} khách</p>
+        <p className="sx-chat-room-location">{room.property.district ? `${room.property.district}, ` : ''}{getCityLabel(room.property.city)} · tối đa {room.maxGuests} khách</p>
         {room.availabilityChecked && <p className="sx-chat-room-availability">{room.availableRooms} phòng còn trống trong ngày đã chọn</p>}
         {room.amenities.length > 0 && <div className="sx-chat-room-amenities">{room.amenities.slice(0, 3).map((amenity) => <span key={amenity}>{amenity}</span>)}</div>}
         <div className="sx-chat-room-footer"><strong>{money(room.basePrice)} <small>{room.averageNightlyPrice ? 'TB / đêm' : '/ đêm'}</small></strong><Link to={`/rooms/${encodeURIComponent(room.id)}`}>Xem phòng <CornerDownLeft size={13} /></Link></div>
