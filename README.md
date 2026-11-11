@@ -195,10 +195,10 @@ npm install && npm run build:client
 4. Add environment variable:
 
 ```bash
-VITE_API_URL=https://your-render-service.onrender.com/api
+VITE_API_URL=https://sieuech-api.onrender.com/api
 ```
 
-5. Deploy the site and confirm the frontend calls the backend API using the Render domain instead of localhost.
+5. Set the same value in Cloudflare Pages **Settings → Environment variables** for Production, then redeploy. The frontend API client uses this base URL for authentication, rooms, properties, bookings, host and admin endpoints.
 
 Run the backend database migration as a one-off command before routing production traffic:
 

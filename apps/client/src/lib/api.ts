@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const apiBaseUrl = configuredApiUrl || (
+  import.meta.env.DEV
+    ? 'http://localhost:5001/api'
+    : 'https://sieuech-api.onrender.com/api'
+);
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:5001/api' : '/api'),
+  baseURL: apiBaseUrl.replace(/\/+$/, ''),
   headers: {
     'Content-Type': 'application/json',
   },
